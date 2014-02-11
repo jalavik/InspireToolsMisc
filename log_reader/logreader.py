@@ -1,17 +1,20 @@
 #!/usr/bin/python
+
 import sys
+import os
+import argparse
 import gtk
 import gobject
 
 
-def parse_invenio_log():
+def parse_invenio_log(log_location):
     """Returns a dictionary ordered by dates"""
     res = {}
 
     cur_exception = None
     cur_data = None
 
-    f = open("/opt/invenio/var/log/invenio.err", "r")
+    f = open(log_location, "r")
     for line in f.readlines():
         if line[:2] == "* ":
             cur_exception = {"stackframe_details" : [], "traceback_details" : [], "user_details": [], "header": []}
@@ -34,12 +37,12 @@ def parse_invenio_log():
         res[date].reverse()
     return res
 
+
 class TutorialTextEditor:
     def on_log_reader_window_destroy(self, widget, data=None):
-        print "Quiting"
         gtk.main_quit()
 
-    def __init__(self):
+    def __init__(self, log_location):
 
         builder = gtk.Builder()
         builder.add_from_file("logreader.glade")
@@ -48,7 +51,7 @@ class TutorialTextEditor:
         self.exceptions_store = gtk.TreeStore(gobject.TYPE_STRING)
         self.exceptions_list = builder.get_object("exceptions_list")
         self.exceptions_list.set_model(self.exceptions_store)
-
+        self.log_location = log_location
 
         builder.connect_signals(self)
         self.window.connect("destroy", lambda w: gtk.main_quit())
@@ -68,8 +71,8 @@ class TutorialTextEditor:
         self.update_exceptions()
 
     def update_exceptions(self):
-        self.exceptions = parse_invenio_log()
-        editor.exceptions_store.clear()
+        self.exceptions = parse_invenio_log(self.log_location)
+        self.exceptions_store.clear()
         self.datelinks = []
         for date in self.exceptions:
             self.datelinks.append(date)
@@ -88,9 +91,23 @@ class TutorialTextEditor:
         self.traceback_detail_view.get_buffer().set_text("\n".join(ex["traceback_details"]))
         self.frame_details_view.get_buffer().set_text("\n".join(ex["stackframe_details"]))
 
-if __name__ == "__main__":
-    editor = TutorialTextEditor()
+
+def main():
+    parser = argparse.ArgumentParser(description='Process Invenio log.')
+    parser.add_argument('log_location', type=str,
+                        metavar="N", nargs='?',
+                        default="/opt/invenio/var/log/invenio.err",
+                        help='log location')
+    args = parser.parse_args()
+    if not os.path.exists(args.log_location):
+        sys.stderr.write("Log file does not exist!")
+        sys.exit(1)
+    editor = TutorialTextEditor(args.log_location)
     editor.window.show()
     editor.update_exceptions()
 
     gtk.main()
+
+
+if __name__ == "__main__":
+    main()
